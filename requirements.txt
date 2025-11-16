@@ -16,6 +16,7 @@ jsonschema-specifications==2025.9.1
 MarkupSafe==3.0.3
 mysql-connector==2.2.9
 narwhals==2.10.1
+ntplib==0.4.0
 numpy==2.3.4
 packaging==25.0
 pandas==2.3.3
