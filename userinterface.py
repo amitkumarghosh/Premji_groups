@@ -113,7 +113,24 @@ if not DATABASE_HELPER_AVAILABLE:
             return None
 
 # page config
-st.set_page_config(page_title="Premji Group", page_icon="🛠️", layout="centered")
+st.set_page_config(page_title="Premji Group", page_icon="🛠️", layout="wide")
+
+
+# Force the main block container to use full width even after reruns
+st.markdown(
+    """
+    <style>
+    .block-container {
+        max-width: 100% !important;
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 
 # temp dir for images (if needed)
 TEMP_IMAGE_DIR = "temp_profile_images"
