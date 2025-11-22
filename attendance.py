@@ -39,7 +39,7 @@ def get_current_ist(timeout=3, debug=False):
             return ist_dt, "NTP (pool.ntp.org)", system_ist
         return ist_dt
 
-    except:
+    except Exception:
         pass
 
     # ---------- 2. Try worldtimeapi ----------
@@ -55,7 +55,7 @@ def get_current_ist(timeout=3, debug=False):
             return ist_dt, "worldtimeapi.org", system_ist
         return ist_dt
 
-    except:
+    except Exception:
         pass
 
     # ---------- 3. Try timeapi.io ----------
@@ -66,10 +66,14 @@ def get_current_ist(timeout=3, debug=False):
         d = r2.json()
 
         aware = datetime(
-            d["year"], d["month"], d["day"],
-            d["hour"], d["minute"], int(d["seconds"]),
+            d["year"],
+            d["month"],
+            d["day"],
+            d["hour"],
+            d["minute"],
+            int(d["seconds"]),
             int(d["milliseconds"]) * 1000,
-            tzinfo=pytz.timezone("Asia/Kolkata")
+            tzinfo=pytz.timezone("Asia/Kolkata"),
         )
         ist_dt = aware.replace(tzinfo=None)
 
@@ -77,7 +81,7 @@ def get_current_ist(timeout=3, debug=False):
             return ist_dt, "timeapi.io", system_ist
         return ist_dt
 
-    except:
+    except Exception:
         pass
 
     # ---------- 4. Last fallback (system clock) ----------
@@ -135,21 +139,27 @@ def attendance_page(user):
     engine = get_db_engine()
     with engine.connect() as conn:
         row = conn.execute(
-            text("""
+            text(
+                """
                 SELECT *
                 FROM preamji_attendance
                 WHERE emp_code_of_thetechnician=:emp AND attendance_date=:dt
-            """),
-            {"emp": emp_code, "dt": today_ist}
+            """
+            ),
+            {"emp": emp_code, "dt": today_ist},
         ).fetchone()
 
-    record = dict(row._mapping) if row else {
-        "id": None,
-        "on_duty_in_time": None,
-        "intermidiate_off_out_time": None,
-        "intermidiate_off_in_time": None,
-        "on_duty_out_time": None,
-    }
+    record = (
+        dict(row._mapping)
+        if row
+        else {
+            "id": None,
+            "on_duty_in_time": None,
+            "intermidiate_off_out_time": None,
+            "intermidiate_off_in_time": None,
+            "on_duty_out_time": None,
+        }
+    )
 
     # Determine next action
     if not record["on_duty_in_time"]:
@@ -172,23 +182,67 @@ def attendance_page(user):
     _, _, icon, start_col, end_col = action_map[next_action]
     button_text = f"{icon} ***Please mark your attendance – {next_action}***"
 
-    st.markdown(f"""
+    # Gradient camera button style (same as your older version)
+    st.markdown(
+        f"""
         <style>
-            div[data-testid="stCameraInput"] button {{
-                font-size: 26px !important;
-                font-weight: 800 !important;
-                padding: 1.1em 2.5em !important;
-                background: linear-gradient(90deg, {start_col}, {end_col}) !important;
-                color: white !important;
-                border-radius: 18px !important;
-                width: 100% !important;
-            }}
+        div[data-testid="stCameraInput"] button {{
+            font-size: 24px !important;
+            font-weight: 800 !important;
+            padding: 1.1em 2.5em !important;
+            background: linear-gradient(90deg, {start_col}, {end_col}) !important;
+            color: white !important;
+            border-radius: 18px !important;
+            width: 100% !important;
+            border: none !important;
+        }}
         </style>
-    """, unsafe_allow_html=True)
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Oval camera preview – only centre visible
+    st.markdown(
+        """
+        <style>
+        /* Center the camera widget */
+        div[data-testid="stCameraInput"] {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Camera preview itself (video / captured image) */
+        div[data-testid="stCameraInput"] video,
+        div[data-testid="stCameraInput"] img {
+            width: min(55vw, 220px) !important;
+            height: min(55vw, 220px) !important;
+            object-fit: cover !important;
+            background: black;
+
+            /* show only an oval in the middle */
+            clip-path: ellipse(36% 50% at 50% 46%);
+            -webkit-clip-path: ellipse(36% 50% at 50% 46%);
+            border-radius: 50%;
+            border: 3px solid #ff4d4d;
+        }
+
+        @media (max-width: 480px) {
+            div[data-testid="stCameraInput"] button {
+                font-size: 18px !important;
+                padding: 0.8em 1.2em !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.caption("📸 Please keep your face inside the red oval while capturing.")
 
     img = st.camera_input(
         button_text,
-        key=f"{emp_code}_{today_ist}"
+        key=f"{emp_code}_{today_ist}",
     )
 
     if "last_capture" not in st.session_state:
@@ -206,18 +260,28 @@ def attendance_page(user):
                 # UPDATE
                 if record["id"]:
                     conn.execute(
-                        text(f"UPDATE preamji_attendance SET {tcol}=:t, {icol}=:img, last_edit_timestamp=:ts WHERE id=:id"),
-                        {"t": now_ist, "img": compressed, "ts": now_ist, "id": record["id"]}
+                        text(
+                            f"UPDATE preamji_attendance "
+                            f"SET {tcol}=:t, {icol}=:img, last_edit_timestamp=:ts "
+                            f"WHERE id=:id"
+                        ),
+                        {"t": now_ist, "img": compressed, "ts": now_ist, "id": record["id"]},
                     )
 
                     # Recalculate only for Out
                     if next_action == "On Duty Out":
                         rec = conn.execute(
-                            text("""
-                                SELECT on_duty_in_time, intermidiate_off_out_time,
-                                       intermidiate_off_in_time, on_duty_out_time
-                                FROM preamji_attendance WHERE id=:id
-                            """), {"id": record["id"]}
+                            text(
+                                """
+                                SELECT on_duty_in_time,
+                                       intermidiate_off_out_time,
+                                       intermidiate_off_in_time,
+                                       on_duty_out_time
+                                FROM preamji_attendance
+                                WHERE id=:id
+                            """
+                            ),
+                            {"id": record["id"]},
                         ).fetchone()
 
                         if rec and rec.on_duty_in_time and rec.on_duty_out_time:
@@ -235,42 +299,63 @@ def attendance_page(user):
                             eff = total_work - total_break
 
                             conn.execute(
-                                text("""
+                                text(
+                                    """
                                     UPDATE preamji_attendance
-                                    SET total_working_hrs=:tw, total_break_hrs=:tb, effective_working_hrs=:ew
+                                    SET total_working_hrs=:tw,
+                                        total_break_hrs=:tb,
+                                        effective_working_hrs=:ew
                                     WHERE id=:id
-                                """),
+                                """
+                                ),
                                 {
                                     "tw": round(total_work, 2),
                                     "tb": round(total_break, 2),
                                     "ew": round(eff, 2),
-                                    "id": record["id"]
-                                }
+                                    "id": record["id"],
+                                },
                             )
 
                 # INSERT
                 else:
                     center = conn.execute(
-                        text("SELECT center_name, center_location FROM employee_details WHERE employee_code=:e"),
-                        {"e": emp_code}
+                        text(
+                            "SELECT center_name, center_location "
+                            "FROM employee_details WHERE employee_code=:e"
+                        ),
+                        {"e": emp_code},
                     ).fetchone()
 
                     cname = center.center_name if center else None
                     cloc = center.center_location if center else None
 
                     conn.execute(
-                        text(f"""
+                        text(
+                            f"""
                             INSERT INTO preamji_attendance(
-                                attendance_date, emp_code_of_thetechnician, name_of_technician,
-                                center_name, center_location,
-                                {tcol}, {icol},
-                                all_innitial_time, last_edit_timestamp
+                                attendance_date,
+                                emp_code_of_thetechnician,
+                                name_of_technician,
+                                center_name,
+                                center_location,
+                                {tcol},
+                                {icol},
+                                all_innitial_time,
+                                last_edit_timestamp
                             )
                             VALUES (
-                                :dt, :emp, :name, :cname, :cloc,
-                                :t, :img, :first, :ts
+                                :dt,
+                                :emp,
+                                :name,
+                                :cname,
+                                :cloc,
+                                :t,
+                                :img,
+                                :first,
+                                :ts
                             )
-                        """),
+                            """
+                        ),
                         {
                             "dt": today_ist,
                             "emp": emp_code,
@@ -280,8 +365,8 @@ def attendance_page(user):
                             "t": now_ist,
                             "img": compressed,
                             "first": now_ist,
-                            "ts": now_ist
-                        }
+                            "ts": now_ist,
+                        },
                     )
 
             st.session_state.last_capture = h
@@ -301,7 +386,8 @@ def show_today_summary(emp_code):
     st.markdown("### 📋 Today's Attendance Summary")
 
     # Keep images non-interactive but allow the link below to open the full image.
-    st.markdown("""
+    st.markdown(
+        """
         <style>
         /* make the IMG itself non-interactive (prevents direct right-click on the image),
            while anchor tags (links) remain fully clickable */
@@ -331,7 +417,9 @@ def show_today_summary(emp_code):
             transform:translateY(-1px);
         }
         </style>
-    """, unsafe_allow_html=True)
+        """,
+        unsafe_allow_html=True,
+    )
 
     # get today's IST date using your existing helper
     now_ist = get_current_ist()
@@ -340,17 +428,26 @@ def show_today_summary(emp_code):
     engine = get_db_engine()
     with engine.connect() as conn:
         r = conn.execute(
-            text("""
+            text(
+                """
                 SELECT
-                    on_duty_in_time, on_duty_in_image,
-                    intermidiate_off_out_time, intermidiate_off_out_image,
-                    intermidiate_off_in_time, intermidiate_off_in_image,
-                    on_duty_out_time, on_duty_out_image,
-                    total_working_hrs, total_break_hrs, effective_working_hrs
+                    on_duty_in_time,
+                    on_duty_in_image,
+                    intermidiate_off_out_time,
+                    intermidiate_off_out_image,
+                    intermidiate_off_in_time,
+                    intermidiate_off_in_image,
+                    on_duty_out_time,
+                    on_duty_out_image,
+                    total_working_hrs,
+                    total_break_hrs,
+                    effective_working_hrs
                 FROM preamji_attendance
-                WHERE emp_code_of_thetechnician = :emp AND attendance_date = :dt
-            """),
-            {"emp": emp_code, "dt": today_ist}
+                WHERE emp_code_of_thetechnician = :emp
+                  AND attendance_date = :dt
+            """
+            ),
+            {"emp": emp_code, "dt": today_ist},
         ).fetchone()
 
     if not r:
@@ -388,21 +485,17 @@ def show_today_summary(emp_code):
                 thumb_bytes = buf.getvalue()
                 thumb_b64 = base64.b64encode(thumb_bytes).decode("utf-8")
 
-                # full image base64
-                full_b64 = base64.b64encode(image_data).decode("utf-8")
-
                 # thumbnail HTML (img is non-interactive by CSS)
                 st.markdown(
                     f"""
                     <div class="attendance-thumb" style="display:flex;flex-direction:column;align-items:center;">
                         <img src="data:image/jpeg;base64,{thumb_b64}" alt="thumbnail" />
-                       
                     </div>
                     """,
-                    unsafe_allow_html=True
+                    unsafe_allow_html=True,
                 )
 
-                # Optional: keep the Streamlit in-page preview button too (works as before)
+                # Preview button
                 btn_key = f"view_{action_label.replace(' ', '_')}"
                 if st.button(f"🔎 Preview — {action_label}", key=btn_key):
                     st.session_state.preview_image = image_data
@@ -414,12 +507,12 @@ def show_today_summary(emp_code):
     if st.session_state.get("preview_image"):
         st.markdown("---")
         st.subheader(f"🖼️ Full Image Preview — {st.session_state.preview_label}")
-        st.image(st.session_state.preview_image, width='stretch')
+        st.image(st.session_state.preview_image, width="auto")
         if st.button("Close Preview"):
             st.session_state.preview_image = None
             st.session_state.preview_label = None
 
-    # Optional: show working-hours summary (unchanged)
+    # Optional: show working-hours summary
     if record.get("on_duty_out_time"):
         st.markdown("---")
         st.subheader("🕒 Today's Working Summary")
