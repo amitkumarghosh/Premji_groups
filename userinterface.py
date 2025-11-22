@@ -27,8 +27,12 @@ except Exception:
 # near other imports
 try:
     from admin_attendance import admin_attendance_page
-except Exception:
+except Exception as e:
     admin_attendance_page = None
+    import streamlit as st
+    st.error("Error importing admin_attendance:")
+    st.exception(e)
+
 
 
 # If no database helper, provide a safe fallback (MySQL via st.secrets or sqlite file)

@@ -1,6 +1,7 @@
 # admin_attendance.py
 import streamlit as st
 from io import BytesIO, StringIO
+import tempfile
 from pathlib import Path
 from datetime import datetime, timedelta, date
 import os
@@ -11,7 +12,7 @@ from PIL import Image, UnidentifiedImageError
 from database import run_query  # your DB helper
 
 # Where to save temp images (Option A)
-IMAGE_DIR = Path("/mnt/data/attendance_images")
+IMAGE_DIR = Path(tempfile.gettempdir()) / "attendance_images"
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 # How long to keep temp files (hours)
