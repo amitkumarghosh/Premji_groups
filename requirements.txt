@@ -17,7 +17,8 @@ MarkupSafe==3.0.3
 mysql-connector==2.2.9
 narwhals==2.10.1
 ntplib==0.4.0
-numpy==2.3.4
+numpy==2.2.6
+opencv-python-headless==4.12.0.88
 packaging==25.0
 pandas==2.3.3
 pillow==12.0.0

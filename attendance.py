@@ -589,7 +589,7 @@ def show_today_summary(emp_code):
     if st.session_state.get("preview_image"):
         st.markdown("---")
         st.subheader(f"🖼️ Full Image Preview — {st.session_state.preview_label}")
-        st.image(st.session_state.preview_image, use_container_width=True)
+        st.image(st.session_state.preview_image, width='stretch')
 
         if st.button("Close Preview"):
             st.session_state.preview_image = None

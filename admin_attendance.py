@@ -337,7 +337,7 @@ def admin_attendance_page():
             if summary_rows:
                 # Convert to dataframe for nice table view
                 df_summary = _rows_to_dataframe(summary_rows)
-                st.dataframe(df_summary, use_container_width=True)
+                st.dataframe(df_summary, width='stretch')
 
                 # CSV download
                 csv_bytes = _rows_to_csv_bytes(summary_rows)
