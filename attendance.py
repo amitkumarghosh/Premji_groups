@@ -10,6 +10,11 @@ from PIL import Image
 import base64
 import time
 
+# NEW imports for face detection
+import cv2
+import numpy as np
+import os
+
 
 # -------------------------------------------------------------
 #  TRUE INTERNET TIME (NTP -> API -> fallback)
@@ -109,6 +114,54 @@ def compress_image(image_data, max_size=(640, 480), quality=60):
 
 
 # -------------------------------------------------------------
+# FACE DETECTION HELPER
+# -------------------------------------------------------------
+def verify_face(image_bytes, min_face_fraction=0.12):
+    """
+    Returns (ok: bool, reason: str).
+
+    ok == True  -> face looks fine, proceed.
+    ok == False -> block & show error based on reason.
+
+    min_face_fraction: minimum acceptable face area as fraction of full image.
+    """
+
+    # Load as grayscale using OpenCV
+    nparr = np.frombuffer(image_bytes, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        return False, "decode_failed"
+
+    h, w = img.shape[:2]
+    total_area = float(h * w)
+
+    cascade_filename = "haarcascade_frontalface_default.xml"
+    if not os.path.exists(cascade_filename):
+        # If cascade missing, do not block (but we can log/info if needed).
+        return True, "cascade_missing"
+
+    face_cascade = cv2.CascadeClassifier(cascade_filename)
+    if face_cascade.empty():
+        return True, "cascade_missing"
+
+    faces = face_cascade.detectMultiScale(
+        img,
+        scaleFactor=1.2,
+        minNeighbors=5,
+        minSize=(40, 40),
+    )
+
+    if len(faces) == 0:
+        return False, "no_face"
+
+    max_area = max((fw * fh) for (x, y, fw, fh) in faces)
+    if max_area < min_face_fraction * total_area:
+        return False, "face_too_small"
+
+    return True, "ok"
+
+
+# -------------------------------------------------------------
 # MAIN ATTENDANCE PAGE
 # -------------------------------------------------------------
 def attendance_page(user):
@@ -182,7 +235,7 @@ def attendance_page(user):
     _, _, icon, start_col, end_col = action_map[next_action]
     button_text = f"{icon} ***Please mark your attendance – {next_action}***"
 
-    # Gradient camera button style (same as your older version)
+    # Gradient camera button style (same as your existing one)
     st.markdown(
         f"""
         <style>
@@ -238,7 +291,7 @@ def attendance_page(user):
         unsafe_allow_html=True,
     )
 
-    st.caption("📸 Please keep your face inside the red oval while capturing.")
+    st.caption("📸 Please keep your full face clearly inside the red oval while capturing.")
 
     img = st.camera_input(
         button_text,
@@ -249,10 +302,48 @@ def attendance_page(user):
         st.session_state.last_capture = None
 
     if img:
-        h = hash(img.getvalue())
+        raw_bytes = img.getvalue()
+
+        # ---------- FACE CHECK FIRST (BEFORE DB) ----------
+        ok, reason = verify_face(raw_bytes)
+
+        if not ok:
+            # Use ERROR (red) & DO NOT save anything
+            if reason == "no_face":
+                st.error(
+                    "❌ Face not detected.\n\n"
+                    "Please keep your **full face** inside the red oval with enough light, "
+                    "and take the photo again."
+                )
+            elif reason == "face_too_small":
+                st.error(
+                    "❌ Your face is too far from the camera.\n\n"
+                    "Please move closer so that your face fills most of the oval, "
+                    "then retake the photo."
+                )
+            elif reason == "decode_failed":
+                st.error("❌ Could not read the image properly. Please try again.")
+            else:
+                st.error(
+                    "❌ Unable to verify your face in this photo. "
+                    "Please try again with your face clearly visible."
+                )
+
+            # IMPORTANT: do not capture/save, do not update last_capture
+            return
+
+        # Cascade missing -> allow but you may inform once
+        if reason == "cascade_missing":
+            st.info(
+                "ℹ️ Face verification model not found on server. "
+                "Attendance will be recorded without automatic face check."
+            )
+
+        # ---------- ONLY HERE WE GO AHEAD WITH DB ----------
+        h = hash(raw_bytes)
         if h != st.session_state.last_capture:
 
-            compressed = compress_image(img.getvalue())
+            compressed = compress_image(raw_bytes)
             tcol, icol, *_ = action_map[next_action]
 
             with engine.begin() as conn:
@@ -279,7 +370,7 @@ def attendance_page(user):
                                        on_duty_out_time
                                 FROM preamji_attendance
                                 WHERE id=:id
-                            """
+                                """
                             ),
                             {"id": record["id"]},
                         ).fetchone()
@@ -306,7 +397,7 @@ def attendance_page(user):
                                         total_break_hrs=:tb,
                                         effective_working_hrs=:ew
                                     WHERE id=:id
-                                """
+                                    """
                                 ),
                                 {
                                     "tw": round(total_work, 2),
@@ -385,12 +476,9 @@ def show_today_summary(emp_code):
 
     st.markdown("### 📋 Today's Attendance Summary")
 
-    # Keep images non-interactive but allow the link below to open the full image.
     st.markdown(
         """
         <style>
-        /* make the IMG itself non-interactive (prevents direct right-click on the image),
-           while anchor tags (links) remain fully clickable */
         .attendance-thumb img {
             pointer-events: none !important;
             user-select: none !important;
@@ -421,7 +509,6 @@ def show_today_summary(emp_code):
         unsafe_allow_html=True,
     )
 
-    # get today's IST date using your existing helper
     now_ist = get_current_ist()
     today_ist = now_ist.date()
 
@@ -443,9 +530,8 @@ def show_today_summary(emp_code):
                     total_break_hrs,
                     effective_working_hrs
                 FROM preamji_attendance
-                WHERE emp_code_of_thetechnician = :emp
-                  AND attendance_date = :dt
-            """
+                WHERE emp_code_of_thetechnician = :emp AND attendance_date = :dt
+                """
             ),
             {"emp": emp_code, "dt": today_ist},
         ).fetchone()
@@ -477,7 +563,6 @@ def show_today_summary(emp_code):
         with col3:
             image_data = record.get(image_col)
             if image_data:
-                # create thumbnail bytes
                 img = Image.open(BytesIO(image_data))
                 img.thumbnail((100, 100))
                 buf = BytesIO()
@@ -485,7 +570,6 @@ def show_today_summary(emp_code):
                 thumb_bytes = buf.getvalue()
                 thumb_b64 = base64.b64encode(thumb_bytes).decode("utf-8")
 
-                # thumbnail HTML (img is non-interactive by CSS)
                 st.markdown(
                     f"""
                     <div class="attendance-thumb" style="display:flex;flex-direction:column;align-items:center;">
@@ -495,7 +579,6 @@ def show_today_summary(emp_code):
                     unsafe_allow_html=True,
                 )
 
-                # Preview button
                 btn_key = f"view_{action_label.replace(' ', '_')}"
                 if st.button(f"🔎 Preview — {action_label}", key=btn_key):
                     st.session_state.preview_image = image_data
@@ -503,16 +586,15 @@ def show_today_summary(emp_code):
             else:
                 st.write("—")
 
-    # Show full-size preview in-page (if chosen)
     if st.session_state.get("preview_image"):
         st.markdown("---")
         st.subheader(f"🖼️ Full Image Preview — {st.session_state.preview_label}")
-        st.image(st.session_state.preview_image, width="auto")
+        st.image(st.session_state.preview_image, use_container_width=True)
+
         if st.button("Close Preview"):
             st.session_state.preview_image = None
             st.session_state.preview_label = None
 
-    # Optional: show working-hours summary
     if record.get("on_duty_out_time"):
         st.markdown("---")
         st.subheader("🕒 Today's Working Summary")
@@ -522,3 +604,6 @@ def show_today_summary(emp_code):
         st.write(f"**Total Working Hours:** {tw} hrs")
         st.write(f"**Total Break Hours:** {tb} hrs")
         st.write(f"**Effective Working Hours:** {ew} hrs")
+        
+
+  
