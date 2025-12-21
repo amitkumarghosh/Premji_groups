@@ -1,6 +1,7 @@
 # userinterface.py
 import streamlit as st
 from attendance import attendance_page
+from new_wo_entry import new_workorder_entry_page
 
 # try to import teamlead and admin pages if present
 try:
@@ -252,6 +253,7 @@ def build_menu_for_role(role: str):
     # Insert role-specific pages in addition to Profile
     if role == 'TeamLeader':
         base.insert(1, "Mark attendance for the other")
+        base.insert(2, "Create or update workorder status")
     elif role == 'Admin':
         base.insert(1, "Workstation")
     elif role == 'Super Admin':
@@ -354,6 +356,9 @@ def user_interface():
 
     elif choice == "Daily Advisor Data Entry":
         st.write("Daily Advisor Data Entry - to be implemented or linked to the advisor page.")
+
+    elif choice == "Create or update workorder status":    
+        new_workorder_entry_page()
 
 
 if __name__ == "__main__":
