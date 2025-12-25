@@ -238,11 +238,8 @@ def new_workorder_entry_page():
                 return
 
 
-            job_assign_date = st.date_input(
-                "Job Assign Date",
-                value=today,
-                min_value=today - timedelta(days=10),
-                max_value=today)
+            job_assign_date = now_ist.date(),   # ✅ Asia/Kolkata date
+            # st.date_input("Job Assign Date",value=today)
             
 
             kilometres = st.number_input("Kilometres", min_value=0)

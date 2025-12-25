@@ -1,7 +1,12 @@
 # userinterface.py
 import streamlit as st
+from admin_update_workorder import admin_update_workorder_page
 from attendance import attendance_page
 from new_wo_entry import new_workorder_entry_page
+from view_workorders import view_workorders_page
+from PIL import Image
+import os
+from io import BytesIO
 
 # try to import teamlead and admin pages if present
 try:
@@ -14,9 +19,7 @@ try:
 except Exception:
     admin_page = None
 
-from PIL import Image
-import os
-from io import BytesIO
+
 
 # Try to use project-level database helper if available
 try:
@@ -132,6 +135,35 @@ st.markdown(
 )
 
 
+# Force all tables to use full width permanently
+st.markdown(
+    """
+    <style>
+    /* Force all tables to use full width permanently */
+    .stMarkdown table {
+        width: 100% !important;
+    }
+
+    /* Ensure horizontal scroll instead of shrinking */
+    .stMarkdown {
+        overflow-x: auto;
+    }
+
+    table {
+        width: 100% !important;
+        border-collapse: collapse;
+    }
+
+    th, td {
+        white-space: nowrap;
+        padding: 8px;
+        text-align: left;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+#----------------------------------------------------------
 
 # temp dir for images (if needed)
 TEMP_IMAGE_DIR = "temp_profile_images"
@@ -253,14 +285,22 @@ def build_menu_for_role(role: str):
     # Insert role-specific pages in addition to Profile
     if role == 'TeamLeader':
         base.insert(1, "Mark attendance for the other")
-        base.insert(2, "Create or update workorder status")
+        base.insert(2, "View Work Orders")
+        base.insert(3, "Create or update WO status")
+
     elif role == 'Admin':
         base.insert(1, "Workstation")
+        base.insert(2, "View Work Orders")
+        base.insert(3, "Update workorder status")
+ 
     elif role == 'Super Admin':
-        base.insert(1, "Daily Advisor Data Entry")
+        # base.insert(1, "Daily Advisor Data Entry")
+        base.insert(1, "View Work Orders")
+        base.insert(2, "Update workorder status")
 
     # Add Administration for Admin and Super Admin (if your main UI includes it)
     # If you already add Admin in sidebar elsewhere, ensure not duplicated
+
     if role in ("Admin", "Super Admin"):
         # put Administration at position 1 (after Attendance)
         if "Administration" not in base:
@@ -357,8 +397,14 @@ def user_interface():
     elif choice == "Daily Advisor Data Entry":
         st.write("Daily Advisor Data Entry - to be implemented or linked to the advisor page.")
 
-    elif choice == "Create or update workorder status":    
+    elif choice == "Create or update WO status":    
         new_workorder_entry_page()
+
+    elif choice == "View Work Orders":
+        view_workorders_page(user)
+
+    elif choice == "Update workorder status":
+        admin_update_workorder_page(user)
 
 
 if __name__ == "__main__":

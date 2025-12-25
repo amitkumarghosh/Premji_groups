@@ -2,14 +2,14 @@ import streamlit as st
 from datetime import datetime
 import pytz
 import requests
-import ntplib
+# import ntplib
 from sqlalchemy import text
 from database import get_db_engine
 from io import BytesIO
 from PIL import Image
 import base64
 import time
-
+from zoneinfo import ZoneInfo
 # NEW imports for face detection
 import cv2
 import numpy as np
@@ -21,31 +21,10 @@ import os
 # -------------------------------------------------------------
 def get_current_ist(timeout=3, debug=False):
     """
-    Returns a TRUE IST datetime regardless of local PC time.
-    Steps:
-        1. NTP (Highly accurate)
-        2. worldtimeapi.org
-        3. timeapi.io
-        4. System clock (fallback with warning)
-    Output: naive datetime (IST) for MySQL DATETIME compatibility
+    Returns current Asia/Kolkata datetime.
+    No network dependency, no warnings.
     """
-
-    # Local system IST (fallback last option)
-    system_ist = datetime.now(pytz.timezone("Asia/Kolkata")).replace(tzinfo=None)
-
-    # ---------- 1. Try NTP ----------
-    try:
-        client = ntplib.NTPClient()
-        response = client.request("pool.ntp.org", version=3, timeout=timeout)
-        utc_dt = datetime.utcfromtimestamp(response.tx_time).replace(tzinfo=pytz.utc)
-        ist_dt = utc_dt.astimezone(pytz.timezone("Asia/Kolkata")).replace(tzinfo=None)
-
-        if debug:
-            return ist_dt, "NTP (pool.ntp.org)", system_ist
-        return ist_dt
-
-    except Exception:
-        pass
+    return datetime.now(ZoneInfo("Asia/Kolkata"))
 
     # ---------- 2. Try worldtimeapi ----------
     try:
