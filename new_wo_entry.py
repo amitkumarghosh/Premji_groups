@@ -284,9 +284,9 @@ def new_workorder_entry_page():
             st.error("Jobcard Date cannot be a future date.")
             return
         
-        if job_assign_date < jobcard_date:
-                st.error("Job Assign Date cannot be before Jobcard Date.")
-                return
+        # if job_assign_date < jobcard_date:
+        #         st.error("Job Assign Date cannot be before Jobcard Date.")
+        #         return
 
         photo_bytes = jobcard_photo.getvalue()
 
