@@ -289,9 +289,9 @@ def build_menu_for_role(role: str):
         base.insert(3, "Create or update WO status")
 
     elif role == 'Admin':
-        base.insert(1, "Workstation")
-        base.insert(2, "View Work Orders")
-        base.insert(3, "Update workorder status")
+        # base.insert(1, "Workstation")
+        base.insert(1, "View Work Orders")
+        base.insert(2, "Update workorder status")
  
     elif role == 'Super Admin':
         # base.insert(1, "Daily Advisor Data Entry")
@@ -391,8 +391,8 @@ def user_interface():
             admin_attendance_page()
 
 
-    elif choice == "Workstation":
-        st.write("Workstation page - to be implemented or wired to your workstation module.")
+    # elif choice == "Workstation":
+    #     st.write("Workstation page - to be implemented or wired to your workstation module.")
 
     elif choice == "Daily Advisor Data Entry":
         st.write("Daily Advisor Data Entry - to be implemented or linked to the advisor page.")
