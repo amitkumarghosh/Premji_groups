@@ -10,7 +10,7 @@ USER_ROLE_OPTIONS_SUPER = ['Accounts', 'Admin', 'Engineer', 'Super Admin', 'Team
 USER_ROLE_OPTIONS_ADMIN = ['Accounts', 'Engineer', 'TeamLeader', 'Technician']
 USER_DETAILS_OPTIONS = [
     'Disc & Drum R', 'Carbon Cl', 'Brake Testing', 'Wash-Cl & Poli',
-    'Manager', 'Admin', 'Accounts', 'Engineer', 'Disc & Drum Sk',' WA-WB-TF','etc.',' Brake Testing',' Wash-Cl & Poli',' CEO',' Managing Director'
+    'Manager', 'Admin', 'Accounts', 'Engineer', 'Disc & Drum Sk',' WA-WB-TF etc.',' Brake Testing',' Wash-Cl & Poli',' CEO',' Managing Director'
 ]
 EMP_STATUS_OPTIONS = ['Active', 'Inactive']
 CENTER_STATUS_OPTIONS = ['Active', 'Inactive']
