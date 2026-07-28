@@ -335,7 +335,7 @@ def user_interface():
     if st.sidebar.button("Logout"):
         st.session_state.clear()
         st.success("Logged out successfully.")
-        st.experimental_rerun()
+        st.rerun()
 
     # Handle menu choices
     if choice == "Attendance":
