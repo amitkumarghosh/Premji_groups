@@ -2,18 +2,46 @@
 import streamlit as st
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
+from urllib.parse import quote_plus
 
 @st.cache_resource
 def get_db_engine():
-    """Create and cache SQLAlchemy engine using Streamlit secrets."""
-    mysql_conf = st.secrets["mysql"]
+
+    mysql = st.secrets["mysql"]
+
+    password = quote_plus(mysql["password"])
+
     connection_string = (
-        f"mysql+pymysql://{mysql_conf['user']}:{mysql_conf['password']}"
-        f"@{mysql_conf['host']}/{mysql_conf['database']}"
-        "?charset=utf8mb4"
+        f"mysql+pymysql://"
+        f"{mysql['user']}:{password}"
+        f"@{mysql['host']}:"
+        f"{mysql.get('port',3306)}/"
+        f"{mysql['database']}"
+        f"?charset=utf8mb4"
     )
-    engine = create_engine(connection_string, pool_pre_ping=True)
+
+    engine = create_engine(
+        connection_string,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+        pool_size=5,
+        max_overflow=10,
+        future=True
+    )
+
     return engine
+
+# @st.cache_resource
+# def get_db_engine():
+#     """Create and cache SQLAlchemy engine using Streamlit secrets."""
+#     mysql_conf = st.secrets["mysql"]
+#     connection_string = (
+#         f"mysql+pymysql://{mysql_conf['user']}:{mysql_conf['password']}"
+#         f"@{mysql_conf['host']}/{mysql_conf['database']}"
+#         "?charset=utf8mb4"
+#     )
+#     engine = create_engine(connection_string, pool_pre_ping=True)
+#     return engine
 
 
 def run_query(query: str, params: dict | None = None, fetch_one: bool = False):
