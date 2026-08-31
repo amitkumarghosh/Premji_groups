@@ -9,8 +9,10 @@ from database import run_query, fetch_employee_details
 USER_ROLE_OPTIONS_SUPER = ['Accounts', 'Admin', 'Engineer', 'Super Admin', 'TeamLeader', 'Technician']
 USER_ROLE_OPTIONS_ADMIN = ['Accounts', 'Engineer', 'TeamLeader', 'Technician']
 USER_DETAILS_OPTIONS = [
-    'Disc & Drum R', 'Carbon Cl', 'Brake Testing', 'Wash-Cl & Poli',
-    'Manager', 'Admin', 'Accounts', 'Engineer', 'Disc & Drum Sk',' WA-WB-TF etc.',' Brake Testing',' Wash-Cl & Poli',' CEO',' Managing Director','Equipment Head','Chauffer','Finance Management (A/C)','Housekeeping Asst','Operations Head (Tyre Business)','Asst. Manager','Ware House Incharge','Sr. Engineer','Admin A/C Asst'
+    'Carbon Cl', 'Brake Testing',
+    'Manager', 'Admin', 'Accounts', 'Engineer', 'Disc & Drum Sk',' WA-WB-TF etc.',' Brake Testing',' Wash-Cl & Poli',' CEO',' Managing Director','Equipment Head','Chauffer','Finance Management (A/C)','Housekeeping Asst','Operations Head (Tyre Business)','Asst. Manager','Ware House Incharge','Sr. Engineer','Admin A/C Asst',
+    'Sr. Executive','Executive','Asst. Executive','Exe. Asst','Staff','Operations Head (Tyre Business)',
+    'Technology Head','Asst. Manager','Office Assistant'
 ]
 EMP_STATUS_OPTIONS = ['Active', 'Inactive']
 CENTER_STATUS_OPTIONS = ['Active', 'Inactive']
