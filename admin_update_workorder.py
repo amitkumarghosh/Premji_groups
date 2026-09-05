@@ -253,159 +253,131 @@ def admin_update_workorder_page(user):
         # =================================================
         with col1:
 
-            # -------------------------------------------------
-            # Jobcard Type
-            # -------------------------------------------------
-            jobcard_type = st.selectbox(
-                "Jobcard Type",
-                jobcard_types,
-                index=jobcard_types.index(current_jobcard_type)
-                if current_jobcard_type in jobcard_types
-                else 0,
-            )
-
-            # -------------------------------------------------
-            # Technician
-            # -------------------------------------------------
-            if tech_codes:
-
-                tech_index = (
-                    tech_codes.index(current_technician_code)
-                    if current_technician_code in tech_codes
-                    else 0
+                jobcard_type = st.selectbox(
+                    "Jobcard Type",
+                    [
+                        "New workorder",
+                        "Repeat Repair",
+                        "Re Visit",
+                        "Re-assigned job"
+                    ],
+                    index=[
+                        "New workorder",
+                        "Repeat Repair",
+                        "Re Visit",
+                        "Re-assigned job"
+                    ].index(data["jobcard_type"]),
                 )
 
-                selected_tech_code = st.selectbox(
+                tech_sel = st.selectbox(
                     "Technician",
-                    tech_codes,
-                    index=tech_index,
-                    format_func=lambda code: (
-                        f"{code} — "
-                        f"{tech_map[code]['employee_name']}"
+                    tech_keys,
+                    index=tech_keys.index(
+                        f"{data['technician_code']} — "
+                        f"{data['name_of_technician']}"
                     ),
                 )
 
-                tech = tech_map[selected_tech_code]
+                tech = tech_map[tech_sel]
 
-            else:
-                st.error(
-                    "No technician is available for this center."
+                st.text_input(
+                    "Name of Technician",
+                    value=tech["employee_name"],
+                    disabled=True,
                 )
 
-                tech = {
-                    "employee_code": current_technician_code,
-                    "employee_name": current_technician_name,
-                }
-
-            # -------------------------------------------------
-            # Technician Name
-            # -------------------------------------------------
-            st.text_input(
-                "Name of Technician",
-                value=tech.get("employee_name", ""),
-                disabled=True,
-            )
-
-            # -------------------------------------------------
-            # Jobcard Photo
-            # -------------------------------------------------
-            jobcard_photo = st.camera_input(
-                "Update Jobcard Photo (Optional)"
-            )
-
-            # -------------------------------------------------
-            # Previous Jobcard No
-            # -------------------------------------------------
-            previous_jobcard_no = st.text_input(
-                "Previous Jobcard No",
-                value=data.get("previous_jobcard_no") or "",
-                disabled=True,
-            )
-
-            # -------------------------------------------------
-            # Vehicle Registration No
-            # -------------------------------------------------
-            vehicle_registration_no = st.text_input(
-                "Vehicle Registration No",
-                value=data.get("vehicle_registration_no") or "",
-            )
-
-            # -------------------------------------------------
-            # Vehicle Manufacturer
-            # -------------------------------------------------
-            if manufacturers:
-
-                manufacturer_index = (
-                    manufacturers.index(current_manufacturer)
-                    if current_manufacturer in manufacturers
-                    else 0
+                jobcard_photo = st.camera_input(
+                    "Update Jobcard Photo (Optional)"
                 )
+
+                previous_jobcard_no = st.text_input(
+                    "Previous Jobcard No",
+                    value=data.get("previous_jobcard_no") or "",
+                    disabled=True,
+                )
+
+                vehicle_registration_no = st.text_input(
+                    "Vehicle Registration No",
+                    value=data["vehicle_registration_no"],
+                )
+
+                # -------------------------------------------------
+                # Vehicle Manufacturer
+                # -------------------------------------------------
+
+                manufacturers = get_vehicle_manufacturers()
+
+                current_manufacturer = (
+                    data.get("vehicle_manufacturer") or ""
+                )
+
+                if not manufacturers:
+                    st.error(
+                        "No vehicle manufacturers found in vehicle master."
+                    )
+                    st.stop()
+
+                # Keep old manufacturer if it is no longer in master
+                if current_manufacturer not in manufacturers:
+                    manufacturers = [
+                        current_manufacturer
+                    ] + manufacturers
 
                 vehicle_manufacturer = st.selectbox(
                     "Vehicle Manufacturer",
                     manufacturers,
-                    index=manufacturer_index,
+                    index=manufacturers.index(current_manufacturer),
                 )
 
-            else:
-                st.error(
-                    "No vehicle manufacturer is available."
-                )
+                # -------------------------------------------------
+                # Vehicle Model
+                # Depends on Vehicle Manufacturer
+                # -------------------------------------------------
 
-                vehicle_manufacturer = current_manufacturer or ""
+                models = get_vehicle_models(vehicle_manufacturer)
 
-            # -------------------------------------------------
-            # Vehicle Model
-            # -------------------------------------------------
-            # Get models again because manufacturer might have
-            # been changed by the user.
-            current_models = get_vehicle_models(
-                vehicle_manufacturer
-            ) or []
+                current_model = data.get("vehicle_model") or ""
 
-            # If the existing model belongs to the selected
-            # manufacturer, keep it.
-            if current_model and current_model not in current_models:
+                if not models:
 
-                # Only retain the old model if the user has not
-                # changed the manufacturer.
-                if vehicle_manufacturer == current_manufacturer:
-                    current_models.insert(0, current_model)
+                    st.warning(
+                        f"No vehicle models found for "
+                        f"'{vehicle_manufacturer}'."
+                    )
 
-            if current_models:
+                    vehicle_model = st.text_input(
+                        "Vehicle Model",
+                        value=current_model,
+                    )
 
-                model_index = (
-                    current_models.index(current_model)
-                    if current_model in current_models
-                    else 0
-                )
+                else:
 
-                vehicle_model = st.selectbox(
-                    "Vehicle Model",
-                    current_models,
-                    index=model_index,
-                )
+                    # Keep old model if it is not available anymore
+                    if current_model and current_model not in models:
 
-            else:
+                        models = [current_model] + models
 
-                st.warning(
-                    f"No vehicle models found for "
-                    f"'{vehicle_manufacturer}'."
-                )
+                        st.warning(
+                            f"The existing vehicle model "
+                            f"'{current_model}' is not available "
+                            f"for '{vehicle_manufacturer}'. "
+                            f"The existing model has been retained."
+                        )
 
-                vehicle_model = st.text_input(
-                    "Vehicle Model",
-                    value=current_model or "",
-                )
+                    vehicle_model = st.selectbox(
+                        "Vehicle Model",
+                        models,
+                        index=(
+                            models.index(current_model)
+                            if current_model in models
+                            else 0
+                        ),
+                    )
 
-            # -------------------------------------------------
-            # Vehicle Variant
-            # -------------------------------------------------
-            vehicle_variant = st.text_input(
-                "Vehicle Variant",
-                value=data.get("vehicle_variant") or "",
-            )
-
+                vehicle_variant = st.text_input(
+                    "Vehicle Variant",
+                    value=data["vehicle_variant"],
+                )        
         # =================================================
         # RIGHT COLUMN
         # =================================================

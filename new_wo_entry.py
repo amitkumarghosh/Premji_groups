@@ -41,20 +41,56 @@ def get_technicians_by_center(center_code):
 
 
 def get_vehicle_manufacturers():
-    sql = "SELECT DISTINCT vehicle_manufacturer FROM vehicle_model ORDER BY vehicle_manufacturer"
-    rows = run_query(sql, fetch_one=False)
-    return [r["vehicle_manufacturer"] for r in rows] if rows else []
+    """
+    Return unique vehicle manufacturers.
+    """
+
+    sql = """
+        SELECT DISTINCT Vehicle_Manufacturer
+        FROM vehicle_model
+        WHERE Vehicle_Manufacturer IS NOT NULL
+          AND TRIM(Vehicle_Manufacturer) <> ''
+        ORDER BY Vehicle_Manufacturer
+    """
+
+    rows = run_query(
+        sql,
+        fetch_one=False
+    ) or []
+
+    return [
+        row["Vehicle_Manufacturer"]
+        for row in rows
+        if row.get("Vehicle_Manufacturer")
+    ]
 
 
 def get_vehicle_models(manufacturer):
-    sql = """
-        SELECT vehicle_model
-        FROM vehicle_model
-        WHERE vehicle_manufacturer = :vm
-        ORDER BY vehicle_model
     """
-    rows = run_query(sql, {"vm": manufacturer}, fetch_one=False)
-    return [r["vehicle_model"] for r in rows] if rows else []
+    Return vehicle models for the selected manufacturer.
+    Duplicate models are removed.
+    """
+
+    sql = """
+        SELECT DISTINCT Vehicle_Model
+        FROM vehicle_model
+        WHERE Vehicle_Manufacturer = :manufacturer
+          AND Vehicle_Model IS NOT NULL
+          AND TRIM(Vehicle_Model) <> ''
+        ORDER BY Vehicle_Model
+    """
+
+    rows = run_query(
+        sql,
+        {"manufacturer": vehicle_manufacturer},
+        fetch_one=False
+    ) or []
+
+    return [
+        row["Vehicle_Model"]
+        for row in rows
+        if row.get("Vehicle_Model")
+    ]
 
 
 def get_open_jobcards(center_code):
