@@ -237,63 +237,131 @@ def new_workorder_entry_page():
         for t in technicians
     }
 
-    with st.form("new_job_form", clear_on_submit=True):
+    # =================================================
+    # VEHICLE MANUFACTURER & MODEL
+    # IMPORTANT:
+    # These MUST be OUTSIDE the st.form so that
+    # Model can change when Manufacturer changes.
+    # =================================================
 
+    manufacturers = get_vehicle_manufacturers()
+
+    if not manufacturers:
+        st.error("No vehicle manufacturers found in vehicle master.")
+        return
+
+
+    def reset_teamleader_vehicle_model():
+        st.session_state["tl_vehicle_model"] = ""
+
+
+    vehicle_manufacturer = st.selectbox(
+        "Vehicle Manufacturer",
+        manufacturers,
+        key="tl_vehicle_manufacturer",
+        on_change=reset_teamleader_vehicle_model
+    )
+
+    # Get models for selected manufacturer
+    models = get_vehicle_models(vehicle_manufacturer)
+
+    if not models:
+        st.warning(
+            f"No vehicle models found for '{vehicle_manufacturer}'."
+        )
+        vehicle_model = ""
+    else:
+        vehicle_model = st.selectbox(
+            "Vehicle Model",
+            models,
+            key="tl_vehicle_model"
+        )
+
+
+    # =================================================
+    # REST OF THE FORM
+    # =================================================
+
+    with st.form("new_job_form", clear_on_submit=True):
 
         col1, col2 = st.columns([1, 1], gap="large")
 
+        # =================================================
+        # LEFT COLUMN
+        # =================================================
 
         with col1:
+
             tech_sel = st.selectbox(
                 "Technician",
                 list(tech_map.keys()),
-                 key="technician_select"
+                key="technician_select"
             )
-
-           
 
             tech = tech_map[tech_sel]
 
-            jobcard_photo = st.camera_input("Capture Jobcard Photo")
-
-           
-            vehicle_registration_no = st.text_input("Vehicle Registration No *")
-
-            vehicle_manufacturer = st.selectbox(
-                "Vehicle Manufacturer",
-                get_vehicle_manufacturers()
+            jobcard_photo = st.camera_input(
+                "Capture Jobcard Photo"
             )
 
-            vehicle_model = st.selectbox(
-                "Vehicle Model",
-                get_vehicle_models(vehicle_manufacturer)
+            vehicle_registration_no = st.text_input(
+                "Vehicle Registration No *"
             )
 
-            vehicle_variant = st.text_input("Vehicle Variant")
+            # Manufacturer and Model are intentionally
+            # outside the form above.
+
+            vehicle_variant = st.text_input(
+                "Vehicle Variant"
+            )
+
+        # =================================================
+        # RIGHT COLUMN
+        # =================================================
 
         with col2:
-            jobcard_no = st.text_input("Jobcard No")
-            jobcard_date = st.date_input("Jobcard Date", value=today, min_value=today - timedelta(days=10), max_value=today)
+
+            jobcard_no = st.text_input(
+                "Jobcard No"
+            )
+
+            jobcard_date = st.date_input(
+                "Jobcard Date",
+                value=today,
+                min_value=today - timedelta(days=10),
+                max_value=today
+            )
+
             if jobcard_date > today:
-                st.error("Jobcard Date cannot be a future date.")
+                st.error(
+                    "Jobcard Date cannot be a future date."
+                )
                 return
 
+            job_assign_date = now_ist.date()
 
-            job_assign_date = now_ist.date(),   # ✅ Asia/Kolkata date
-            # st.date_input("Job Assign Date",value=today)
-            
+            kilometres = st.number_input(
+                "Kilometres",
+                min_value=0
+            )
 
-            kilometres = st.number_input("Kilometres", min_value=0)
-            service_advisor = st.text_input("Name of Service Advisor")
-            tl_remarks = st.text_area("TL Remarks")
+            service_advisor = st.text_input(
+                "Name of Service Advisor"
+            )
+
+            tl_remarks = st.text_area(
+                "TL Remarks"
+            )
 
         st.markdown("---")
 
         st.write("**Center Details (Auto)**")
         st.write(center)
 
-        submitted = st.form_submit_button("✅ Submit New Job")
-        
+        submitted = st.form_submit_button(
+            "✅ Submit New Job"
+        )
+            
 
     # -------------------------------------------------
     # Submit Logic
