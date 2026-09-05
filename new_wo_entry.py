@@ -65,9 +65,9 @@ def get_vehicle_manufacturers():
     ]
 
 
-def get_vehicle_models(manufacturer):
+def get_vehicle_models(vehicle_manufacturer):
     """
-    Return vehicle models for the selected manufacturer.
+    Get vehicle models based on the selected manufacturer.
     Duplicate models are removed.
     """
 
@@ -91,7 +91,6 @@ def get_vehicle_models(manufacturer):
         for row in rows
         if row.get("Vehicle_Model")
     ]
-
 
 def get_open_jobcards(center_code):
     sql = """
