@@ -23,15 +23,21 @@ def get_teamlead_center(user):
 
 
 def get_technicians_by_center(center_code):
+
     sql = """
         SELECT employee_code, employee_name
         FROM employee_details
         WHERE center_code = :cc
-          AND user_role = 'Technician' OR user_role = 'Engineer'
+          AND (user_role = 'Technician' OR user_role = 'Engineer')
           AND employee_status = 'Active'
         ORDER BY employee_name
     """
-    return run_query(sql, {"cc": center_code}, fetch_one=False) or []
+
+    return run_query(
+        sql,
+        {"cc": center_code},
+        fetch_one=False
+    ) or []
 
 
 def get_vehicle_manufacturers():
