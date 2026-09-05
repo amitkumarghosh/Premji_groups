@@ -1,5 +1,4 @@
 import streamlit as st
-from datetime import timedelta
 from database import run_query
 from attendance import get_current_ist
 from new_wo_entry import (
@@ -26,11 +25,26 @@ def get_editable_workorders():
 
 
 def get_technician_map(center_code):
-    technicians = get_technicians_by_center(center_code)
-    return {
-        f"{t['employee_code']} — {t['employee_name']}": t
-        for t in technicians
-    }
+    """
+    Create technician list using employee_code as the unique key.
+
+    This is safer than using:
+        employee_code + employee_name
+
+    because the technician's name may change in the master table.
+    """
+    technicians = get_technicians_by_center(center_code) or []
+
+    tech_map = {}
+
+    for t in technicians:
+        employee_code = str(t.get("employee_code") or "").strip()
+        employee_name = str(t.get("employee_name") or "").strip()
+
+        if employee_code:
+            tech_map[employee_code] = t
+
+    return tech_map
 
 
 # ---------------------------------------------------------
@@ -39,6 +53,9 @@ def get_technician_map(center_code):
 
 def admin_update_workorder_page(user):
 
+    # -----------------------------------------------------
+    # Access Control
+    # -----------------------------------------------------
     if user.get("user_role") not in ("Admin", "Super Admin"):
         st.error("Access denied.")
         return
@@ -49,15 +66,28 @@ def admin_update_workorder_page(user):
     # Select Workorder
     # -----------------------------------------------------
     workorders = get_editable_workorders()
+
     if not workorders:
         st.info("No workorders available.")
         return
 
-    wo_map = {f"{r['id']} — {r['jobcard_no']}": r["id"] for r in workorders}
-    selected = st.selectbox("Search Workorder by ID", list(wo_map.keys()))
+    wo_map = {
+        f"{r['id']} — {r['jobcard_no']}": r["id"]
+        for r in workorders
+    }
+
+    selected = st.selectbox(
+        "Search Workorder by ID",
+        list(wo_map.keys())
+    )
+
     workorder_id = wo_map[selected]
 
+    # -----------------------------------------------------
+    # Load Workorder Details
+    # -----------------------------------------------------
     data = get_workorder_details(workorder_id)
+
     if not data:
         st.error("Unable to load workorder details.")
         return
@@ -68,21 +98,27 @@ def admin_update_workorder_page(user):
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.button("🗑 Delete Record"):
-            run_query(
-                "UPDATE workorder_entry SET delete_flag = 1 WHERE id = :id",
-                {"id": workorder_id},
-            )
-            st.success("Record deleted successfully.")
-            st.rerun()
+        delete_clicked = st.button("🗑 Delete Record")
 
     with col2:
         edit_mode = st.button("✏️ Edit Record")
 
-    # if not edit_mode:
-    #     st.subheader("📄 Workorder Details (Read Only)")
-    #     st.json(data)
-    #     return
+    # -----------------------------------------------------
+    # Delete Record
+    # -----------------------------------------------------
+    if delete_clicked:
+
+        run_query(
+            """
+            UPDATE workorder_entry
+            SET delete_flag = 1
+            WHERE id = :id
+            """,
+            {"id": workorder_id},
+        )
+
+        st.success("Record deleted successfully.")
+        st.rerun()
 
     # -----------------------------------------------------
     # Edit Form
@@ -93,175 +129,503 @@ def admin_update_workorder_page(user):
     now_ist = get_current_ist()
     today = now_ist.date()
 
+    # -----------------------------------------------------
+    # Center Details
+    # -----------------------------------------------------
     center = {
-        "center_code": data["center_code"],
-        "center_name": data["center_name"],
-        "center_location": data["center_location"],
+        "center_code": data.get("center_code"),
+        "center_name": data.get("center_name"),
+        "center_location": data.get("center_location"),
     }
 
+    # -----------------------------------------------------
+    # Technician List
+    # -----------------------------------------------------
     tech_map = get_technician_map(center["center_code"])
-    tech_keys = list(tech_map.keys())
 
+    # Existing technician from the workorder
+    current_technician_code = str(
+        data.get("technician_code") or ""
+    ).strip()
+
+    current_technician_name = str(
+        data.get("name_of_technician") or ""
+    ).strip()
+
+    # -----------------------------------------------------
+    # IMPORTANT:
+    # If the old technician is not available in the current
+    # technician master list, add the old technician temporarily.
+    #
+    # This prevents ValueError and also prevents the existing
+    # technician from being accidentally changed.
+    # -----------------------------------------------------
+    if (
+        current_technician_code
+        and current_technician_code not in tech_map
+    ):
+        tech_map[current_technician_code] = {
+            "employee_code": current_technician_code,
+            "employee_name": current_technician_name,
+        }
+
+        st.warning(
+            f"⚠️ The existing technician "
+            f"'{current_technician_code} — {current_technician_name}' "
+            "is not available in the current technician master list. "
+            "The existing technician has been retained."
+        )
+
+    tech_codes = list(tech_map.keys())
+
+    # -----------------------------------------------------
+    # Jobcard Type Options
+    # -----------------------------------------------------
+    jobcard_types = [
+        "New workorder",
+        "Repeat Repair",
+        "Re Visit",
+        "Re-assigned job",
+    ]
+
+    current_jobcard_type = data.get("jobcard_type")
+
+    # If old value is not in current options, keep it available
+    if (
+        current_jobcard_type
+        and current_jobcard_type not in jobcard_types
+    ):
+        jobcard_types.insert(0, current_jobcard_type)
+
+        st.warning(
+            f"⚠️ Existing Jobcard Type "
+            f"'{current_jobcard_type}' is not in the current options. "
+            "It has been retained."
+        )
+
+    # -----------------------------------------------------
+    # Vehicle Manufacturer List
+    # -----------------------------------------------------
+    manufacturers = get_vehicle_manufacturers() or []
+
+    current_manufacturer = data.get("vehicle_manufacturer")
+
+    # Keep old manufacturer if it no longer exists in master list
+    if (
+        current_manufacturer
+        and current_manufacturer not in manufacturers
+    ):
+        manufacturers.insert(0, current_manufacturer)
+
+        st.warning(
+            f"⚠️ Existing vehicle manufacturer "
+            f"'{current_manufacturer}' is not in the current master list. "
+            "It has been retained."
+        )
+
+    # -----------------------------------------------------
+    # Vehicle Model List
+    # -----------------------------------------------------
+    models = get_vehicle_models(current_manufacturer) or []
+
+    current_model = data.get("vehicle_model")
+
+    # Keep old model if it is still relevant to the current manufacturer
+    if current_model and current_model not in models:
+        models.insert(0, current_model)
+
+        st.warning(
+            f"⚠️ Existing vehicle model "
+            f"'{current_model}' is not available for "
+            f"'{current_manufacturer}'. It has been retained."
+        )
+
+    # -----------------------------------------------------
+    # FORM
+    # -----------------------------------------------------
     with st.form("edit_workorder_form"):
 
         col1, col2 = st.columns(2)
 
+        # =================================================
+        # LEFT COLUMN
+        # =================================================
         with col1:
+
+            # -------------------------------------------------
+            # Jobcard Type
+            # -------------------------------------------------
             jobcard_type = st.selectbox(
                 "Jobcard Type",
-                ["New workorder", "Repeat Repair", "Re Visit", "Re-assigned job"],
-                index=["New workorder", "Repeat Repair", "Re Visit", "Re-assigned job"].index(
-                    data["jobcard_type"]
-                ),
+                jobcard_types,
+                index=jobcard_types.index(current_jobcard_type)
+                if current_jobcard_type in jobcard_types
+                else 0,
             )
 
-            tech_sel = st.selectbox(
-                "Technician",
-                tech_keys,
-                index=tech_keys.index(
-                    f"{data['technician_code']} — {data['name_of_technician']}"
-                ),
-            )
+            # -------------------------------------------------
+            # Technician
+            # -------------------------------------------------
+            if tech_codes:
 
-            tech = tech_map[tech_sel]
+                tech_index = (
+                    tech_codes.index(current_technician_code)
+                    if current_technician_code in tech_codes
+                    else 0
+                )
 
+                selected_tech_code = st.selectbox(
+                    "Technician",
+                    tech_codes,
+                    index=tech_index,
+                    format_func=lambda code: (
+                        f"{code} — "
+                        f"{tech_map[code]['employee_name']}"
+                    ),
+                )
+
+                tech = tech_map[selected_tech_code]
+
+            else:
+                st.error(
+                    "No technician is available for this center."
+                )
+
+                tech = {
+                    "employee_code": current_technician_code,
+                    "employee_name": current_technician_name,
+                }
+
+            # -------------------------------------------------
+            # Technician Name
+            # -------------------------------------------------
             st.text_input(
                 "Name of Technician",
-                value=tech["employee_name"],
+                value=tech.get("employee_name", ""),
                 disabled=True,
             )
 
-            jobcard_photo = st.camera_input("Update Jobcard Photo (Optional)")
+            # -------------------------------------------------
+            # Jobcard Photo
+            # -------------------------------------------------
+            jobcard_photo = st.camera_input(
+                "Update Jobcard Photo (Optional)"
+            )
 
+            # -------------------------------------------------
+            # Previous Jobcard No
+            # -------------------------------------------------
             previous_jobcard_no = st.text_input(
                 "Previous Jobcard No",
                 value=data.get("previous_jobcard_no") or "",
                 disabled=True,
             )
 
+            # -------------------------------------------------
+            # Vehicle Registration No
+            # -------------------------------------------------
             vehicle_registration_no = st.text_input(
                 "Vehicle Registration No",
-                value=data["vehicle_registration_no"],
+                value=data.get("vehicle_registration_no") or "",
             )
 
-            vehicle_manufacturer = st.selectbox(
-                "Vehicle Manufacturer",
-                get_vehicle_manufacturers(),
-                index=get_vehicle_manufacturers().index(data["vehicle_manufacturer"]),
-            )
+            # -------------------------------------------------
+            # Vehicle Manufacturer
+            # -------------------------------------------------
+            if manufacturers:
 
-            vehicle_model = st.selectbox(
-                "Vehicle Model",
-                get_vehicle_models(vehicle_manufacturer),
-                index=get_vehicle_models(vehicle_manufacturer).index(data["vehicle_model"]),
-            )
+                manufacturer_index = (
+                    manufacturers.index(current_manufacturer)
+                    if current_manufacturer in manufacturers
+                    else 0
+                )
 
+                vehicle_manufacturer = st.selectbox(
+                    "Vehicle Manufacturer",
+                    manufacturers,
+                    index=manufacturer_index,
+                )
+
+            else:
+                st.error(
+                    "No vehicle manufacturer is available."
+                )
+
+                vehicle_manufacturer = current_manufacturer or ""
+
+            # -------------------------------------------------
+            # Vehicle Model
+            # -------------------------------------------------
+            # Get models again because manufacturer might have
+            # been changed by the user.
+            current_models = get_vehicle_models(
+                vehicle_manufacturer
+            ) or []
+
+            # If the existing model belongs to the selected
+            # manufacturer, keep it.
+            if current_model and current_model not in current_models:
+
+                # Only retain the old model if the user has not
+                # changed the manufacturer.
+                if vehicle_manufacturer == current_manufacturer:
+                    current_models.insert(0, current_model)
+
+            if current_models:
+
+                model_index = (
+                    current_models.index(current_model)
+                    if current_model in current_models
+                    else 0
+                )
+
+                vehicle_model = st.selectbox(
+                    "Vehicle Model",
+                    current_models,
+                    index=model_index,
+                )
+
+            else:
+
+                st.warning(
+                    f"No vehicle models found for "
+                    f"'{vehicle_manufacturer}'."
+                )
+
+                vehicle_model = st.text_input(
+                    "Vehicle Model",
+                    value=current_model or "",
+                )
+
+            # -------------------------------------------------
+            # Vehicle Variant
+            # -------------------------------------------------
             vehicle_variant = st.text_input(
                 "Vehicle Variant",
-                value=data["vehicle_variant"],
+                value=data.get("vehicle_variant") or "",
             )
 
+        # =================================================
+        # RIGHT COLUMN
+        # =================================================
         with col2:
+
+            # -------------------------------------------------
+            # Jobcard No
+            # -------------------------------------------------
             jobcard_no = st.text_input(
                 "Jobcard No",
-                value=data["jobcard_no"],
+                value=data.get("jobcard_no") or "",
             )
 
+            # -------------------------------------------------
+            # Jobcard Date
+            # -------------------------------------------------
             jobcard_date = st.date_input(
                 "Jobcard Date",
-                value=data["jobcard_date"],
+                value=data.get("jobcard_date"),
                 max_value=today,
             )
 
+            # -------------------------------------------------
+            # Job Assign Date
+            # -------------------------------------------------
             st.date_input(
                 "Job Assign Date",
-                value=data["job_assign_date"],
+                value=data.get("job_assign_date"),
                 disabled=True,
             )
 
+            # -------------------------------------------------
+            # Kilometres
+            # -------------------------------------------------
             kilometres = st.number_input(
                 "Kilometres",
-                value=int(data["kilometres"] or 0),
+                value=int(data.get("kilometres") or 0),
                 min_value=0,
             )
 
+            # -------------------------------------------------
+            # Service Advisor
+            # -------------------------------------------------
             service_advisor = st.text_input(
                 "Name of Service Advisor",
-                value=data["name_of_service_advisor"],
+                value=data.get("name_of_service_advisor") or "",
             )
+
+            # -------------------------------------------------
+            # Job Status
+            # -------------------------------------------------
+            job_status_options = [
+                "In Progress",
+                "Re-Assigned",
+                "Closed",
+            ]
+
+            current_job_status = data.get("job_status")
+
+            # If database contains another status, keep it
+            if (
+                current_job_status
+                and current_job_status not in job_status_options
+            ):
+                job_status_options.insert(
+                    0,
+                    current_job_status
+                )
 
             job_status = st.selectbox(
                 "Job Status",
-                ["In Progress", "Re-Assigned", "Closed"],
-                index=["In Progress", "Re-Assigned", "Closed"].index(
-                    data["job_status"]
-                ),
+                job_status_options,
+                index=job_status_options.index(
+                    current_job_status
+                )
+                if current_job_status in job_status_options
+                else 0,
             )
 
+            # -------------------------------------------------
+            # Admin Remarks
+            # -------------------------------------------------
             admin_remarks = st.text_area(
                 "Admin Remarks",
                 value=data.get("admin_remarks") or "",
             )
 
+        # -----------------------------------------------------
+        # Center Details
+        # -----------------------------------------------------
         st.markdown("---")
         st.write("**Center Details (Auto)**")
         st.write(center)
 
-        submit = st.form_submit_button("💾 Update Workorder")
-
-    old_status = data["job_status"]
-    new_status = job_status
-
-    # ❌ Admin cannot set Re-Assigned or Closed/Completed
-    if new_status in ("Re-Assigned", "Completed", "Closed"):
-        if old_status != new_status:
-            st.error("❌ Please ask the team leader to change this.")
-            return
-
-
-    # -----------------------------------------------------
-    # Submit Logic
-    # -----------------------------------------------------
-    if submit:
-
-        photo_bytes = (
-            jobcard_photo.getvalue()
-            if jobcard_photo
-            else data["jobcard_photo"]
+        # -----------------------------------------------------
+        # SUBMIT BUTTON
+        # -----------------------------------------------------
+        submit = st.form_submit_button(
+            "💾 Update Workorder"
         )
 
+    # =========================================================
+    # STATUS VALIDATION
+    # =========================================================
+
+    old_status = data.get("job_status")
+    new_status = job_status
+
+    # Admin cannot change the status to Re-Assigned or Closed
+    # if it is currently different.
+    if new_status in (
+        "Re-Assigned",
+        "Completed",
+        "Closed",
+    ):
+
+        if old_status != new_status:
+
+            st.error(
+                "❌ Admin cannot change the workorder to "
+                f"'{new_status}'. "
+                "Please ask the Team Leader to change this status."
+            )
+
+            return
+
+    # =========================================================
+    # SUBMIT LOGIC
+    # =========================================================
+
+    if submit:
+
+        # -----------------------------------------------------
+        # Photo
+        # -----------------------------------------------------
+        if jobcard_photo:
+            photo_bytes = jobcard_photo.getvalue()
+        else:
+            photo_bytes = data.get("jobcard_photo")
+
+        # -----------------------------------------------------
+        # Payload
+        # -----------------------------------------------------
         payload = {
             "jobcard_type": jobcard_type,
-            "technician_code": tech["employee_code"],
-            "name_of_technician": tech["employee_name"],
+
+            "technician_code": tech.get(
+                "employee_code"
+            ),
+
+            "name_of_technician": tech.get(
+                "employee_name"
+            ),
+
             "jobcard_photo": photo_bytes,
-            "vehicle_registration_no": vehicle_registration_no,
-            "vehicle_manufacturer": vehicle_manufacturer,
-            "vehicle_model": vehicle_model,
-            "vehicle_variant": vehicle_variant,
-            "jobcard_no": jobcard_no,
-            "jobcard_date": jobcard_date,
-            "kilometres": kilometres,
-            "name_of_service_advisor": service_advisor,
-            "job_status": job_status,
-            "admin_id": user["employee_code"],
-            "admin_remarks": admin_remarks,
-            "admin_last_update_time": now_ist,
-            "id": workorder_id,
+
+            "vehicle_registration_no":
+                vehicle_registration_no,
+
+            "vehicle_manufacturer":
+                vehicle_manufacturer,
+
+            "vehicle_model":
+                vehicle_model,
+
+            "vehicle_variant":
+                vehicle_variant,
+
+            "jobcard_no":
+                jobcard_no,
+
+            "jobcard_date":
+                jobcard_date,
+
+            "kilometres":
+                kilometres,
+
+            "name_of_service_advisor":
+                service_advisor,
+
+            "job_status":
+                job_status,
+
+            "admin_id":
+                user["employee_code"],
+
+            "admin_remarks":
+                admin_remarks,
+
+            "admin_last_update_time":
+                now_ist,
+
+            "id":
+                workorder_id,
         }
 
-        # Auto completion timestamp
+        # -----------------------------------------------------
+        # Completion Date / Time
+        # -----------------------------------------------------
         if job_status == "Closed":
-            payload["job_compleate_date"] = now_ist.date()
-            payload["job_compleate_time"] = now_ist.time()
+
+            payload["job_compleate_date"] = (
+                now_ist.date()
+            )
+
+            payload["job_compleate_time"] = (
+                now_ist.time()
+            )
 
             completion_sql = """
                 job_compleate_date = :job_compleate_date,
                 job_compleate_time = :job_compleate_time,
             """
+
         else:
+
             completion_sql = ""
 
+        # -----------------------------------------------------
+        # UPDATE SQL
+        # -----------------------------------------------------
         sql = f"""
             UPDATE workorder_entry
             SET
@@ -286,6 +650,13 @@ def admin_update_workorder_page(user):
             WHERE id = :id
         """
 
+        # -----------------------------------------------------
+        # Execute Update
+        # -----------------------------------------------------
         run_query(sql, payload)
-        st.success("✅ Workorder updated successfully.")
+
+        st.success(
+            "✅ Workorder updated successfully."
+        )
+
         st.rerun()
