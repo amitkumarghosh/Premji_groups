@@ -142,8 +142,7 @@ def admin_update_workorder_page(user):
     # Technician List
     # -----------------------------------------------------
     tech_map = get_technician_map(center["center_code"])
-    st.write("DEBUG - Center Code:", repr(center["center_code"]))
-    st.write("DEBUG - Technician Map:", tech_map)
+    
 
     # Existing technician from the workorder
     current_technician_code = str(
